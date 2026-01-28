@@ -8,6 +8,7 @@ const medicineSchema = new mongoose.Schema({
   costPrice: { type: Number, default: 0, min: 0 },
   sellingPrice: { type: Number, default: 0, min: 0 },
   stock: { type: Number, default: 0, min: 0 },
+  minStock: { type: Number, default: 0, min: 0 },
   pendingPricing: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });

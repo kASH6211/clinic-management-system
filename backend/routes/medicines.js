@@ -57,7 +57,10 @@ router.get('/:id', auth, authorize('admin', 'chemist', 'doctor'), async (req, re
 router.post('/', auth, authorize('admin', 'chemist'), [
   body('name').notEmpty(),
   body('costPrice').optional().isNumeric(),
+  body('costPrice').optional().isNumeric(),
   body('sellingPrice').optional().isNumeric(),
+  body('stock').optional().isNumeric(),
+  body('minStock').optional().isNumeric(),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -78,7 +81,10 @@ router.post('/', auth, authorize('admin', 'chemist'), [
 // @access  Private (admin, chemist)
 router.put('/:id', auth, authorize('admin', 'chemist'), [
   body('costPrice').optional().isNumeric(),
+  body('costPrice').optional().isNumeric(),
   body('sellingPrice').optional().isNumeric(),
+  body('stock').optional().isNumeric(),
+  body('minStock').optional().isNumeric(),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

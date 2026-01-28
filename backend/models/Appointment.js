@@ -80,6 +80,7 @@ const appointmentSchema = new mongoose.Schema({
     type: Number,
     min: 0
   },
+  discount: { type: Number, min: 0, default: 0 },
   paymentOnline: { type: Number, min: 0, default: 0 },
   paymentOffline: { type: Number, min: 0, default: 0 },
   createdBy: {
@@ -98,7 +99,7 @@ appointmentSchema.index({ doctor: 1, appointmentDate: 1 });
 appointmentSchema.index({ appointmentDay: 1, dailyToken: 1 }, { unique: true });
 
 // Populate references when querying
-appointmentSchema.pre(/^find/, function(next) {
+appointmentSchema.pre(/^find/, function (next) {
   this.populate({
     path: 'patient',
     select: 'firstName lastName email phone regNo'

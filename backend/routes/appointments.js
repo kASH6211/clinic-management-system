@@ -16,7 +16,7 @@ router.get('/', auth, authorize('admin', 'receptionist', 'doctor', 'chemist'), a
     const { doctorId, patientId, status, date, search } = req.query;
 
     let query = {};
-    
+
     if (doctorId) query.doctor = doctorId;
     // Scope: doctor role only sees own appointments
     if (req.user.role === 'doctor' && req.user.doctorId) {
@@ -88,7 +88,7 @@ router.get('/', auth, authorize('admin', 'receptionist', 'doctor', 'chemist'), a
 router.get('/:id', auth, authorize('admin', 'receptionist', 'doctor', 'chemist'), async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
-    
+
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
@@ -155,8 +155,8 @@ router.post('/', auth, authorize('admin', 'receptionist', 'doctor'), [
     });
 
     if (conflictingAppointment) {
-      return res.status(400).json({ 
-        message: 'Doctor already has an appointment at this time' 
+      return res.status(400).json({
+        message: 'Doctor already has an appointment at this time'
       });
     }
 
@@ -169,8 +169,11 @@ router.post('/', auth, authorize('admin', 'receptionist', 'doctor'), [
     if (typeof appointmentData.paymentOnline !== 'undefined' || typeof appointmentData.paymentOffline !== 'undefined') {
       const paid = Number(appointmentData.paymentOnline || 0) + Number(appointmentData.paymentOffline || 0);
       const amount = Number(appointmentData.amount || 0);
+      const discount = Number(appointmentData.discount || 0);
+      const payable = Math.max(0, amount - discount);
+
       if (paid <= 0) appointmentData.paymentStatus = 'pending';
-      else if (paid < amount) appointmentData.paymentStatus = 'partial';
+      else if (paid < payable) appointmentData.paymentStatus = 'partial';
       else appointmentData.paymentStatus = 'paid';
     }
 
@@ -214,7 +217,8 @@ router.put('/:id', auth, authorize('admin', 'receptionist', 'doctor'), [
   body('appointmentDate').optional().isISO8601().withMessage('Valid appointment date is required'),
   body('appointmentTime').optional().notEmpty().withMessage('Appointment time is required'),
   body('status').optional().isIn(['scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show']),
-  body('type').optional().isIn(['consultation', 'follow-up', 'emergency', 'routine-checkup', 'vaccination'])
+  body('type').optional().isIn(['consultation', 'follow-up', 'emergency', 'routine-checkup', 'vaccination']),
+  body('discount').optional().isNumeric(),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -223,7 +227,7 @@ router.put('/:id', auth, authorize('admin', 'receptionist', 'doctor'), [
     }
 
     const appointment = await Appointment.findById(req.params.id);
-    
+
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
@@ -266,8 +270,8 @@ router.put('/:id', auth, authorize('admin', 'receptionist', 'doctor'), [
       });
 
       if (conflictingAppointment) {
-        return res.status(400).json({ 
-          message: 'Doctor already has an appointment at this time' 
+        return res.status(400).json({
+          message: 'Doctor already has an appointment at this time'
         });
       }
     }
@@ -284,12 +288,15 @@ router.put('/:id', auth, authorize('admin', 'receptionist', 'doctor'), [
         const count = await Appointment.countDocuments({ appointmentDay: day, _id: { $ne: req.params.id } });
         updateBody.dailyToken = count + 1;
         // Recompute paymentStatus here as well when date changes
-        if (typeof updateBody.paymentOnline !== 'undefined' || typeof updateBody.paymentOffline !== 'undefined' || typeof updateBody.amount !== 'undefined') {
+        if (typeof updateBody.paymentOnline !== 'undefined' || typeof updateBody.paymentOffline !== 'undefined' || typeof updateBody.amount !== 'undefined' || typeof updateBody.discount !== 'undefined') {
           const current = await Appointment.findById(req.params.id);
           const paid = Number(updateBody.paymentOnline ?? current.paymentOnline ?? 0) + Number(updateBody.paymentOffline ?? current.paymentOffline ?? 0);
           const amount = Number(updateBody.amount ?? current.amount ?? 0);
+          const discount = Number(updateBody.discount ?? current.discount ?? 0);
+          const payable = Math.max(0, amount - discount);
+
           if (paid <= 0) updateBody.paymentStatus = 'pending';
-          else if (paid < amount) updateBody.paymentStatus = 'partial';
+          else if (paid < payable) updateBody.paymentStatus = 'partial';
           else updateBody.paymentStatus = 'paid';
         }
         try {
@@ -312,12 +319,15 @@ router.put('/:id', auth, authorize('admin', 'receptionist', 'doctor'), [
     }
 
     // If payment fields are present, recompute paymentStatus
-    if (typeof updateBody.paymentOnline !== 'undefined' || typeof updateBody.paymentOffline !== 'undefined' || typeof updateBody.amount !== 'undefined') {
+    if (typeof updateBody.paymentOnline !== 'undefined' || typeof updateBody.paymentOffline !== 'undefined' || typeof updateBody.amount !== 'undefined' || typeof updateBody.discount !== 'undefined') {
       const current = await Appointment.findById(req.params.id);
       const paid = Number(updateBody.paymentOnline ?? current.paymentOnline ?? 0) + Number(updateBody.paymentOffline ?? current.paymentOffline ?? 0);
       const amount = Number(updateBody.amount ?? current.amount ?? 0);
+      const discount = Number(updateBody.discount ?? current.discount ?? 0);
+      const payable = Math.max(0, amount - discount);
+
       if (paid <= 0) updateBody.paymentStatus = 'pending';
-      else if (paid < amount) updateBody.paymentStatus = 'partial';
+      else if (paid < payable) updateBody.paymentStatus = 'partial';
       else updateBody.paymentStatus = 'paid';
     }
 
@@ -344,7 +354,7 @@ router.put('/:id', auth, authorize('admin', 'receptionist', 'doctor'), [
 router.delete('/:id', auth, authorize('admin', 'receptionist'), async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
-    
+
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
@@ -392,11 +402,11 @@ router.get('/doctor/:doctorId/availability', async (req, res) => {
     // Get day of week key
     const dayShort = startDate.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase();
     const dayKey = dayShort === 'sun' ? 'sunday' :
-                   dayShort === 'mon' ? 'monday' :
-                   dayShort === 'tue' ? 'tuesday' :
-                   dayShort === 'wed' ? 'wednesday' :
-                   dayShort === 'thu' ? 'thursday' :
-                   dayShort === 'fri' ? 'friday' : 'saturday';
+      dayShort === 'mon' ? 'monday' :
+        dayShort === 'tue' ? 'tuesday' :
+          dayShort === 'wed' ? 'wednesday' :
+            dayShort === 'thu' ? 'thursday' :
+              dayShort === 'fri' ? 'friday' : 'saturday';
 
     const availability = (doctor.availability && doctor.availability[dayKey]) || { isAvailable: false };
 
@@ -433,10 +443,10 @@ router.get('/doctor/:doctorId/availability', async (req, res) => {
 
     for (let time = startMinutes; time < endMinutes; time += slotDuration) {
       const timeStr = minutesToTime(time);
-      
+
       // Check if this time slot is already booked
       const isBooked = existingAppointments.some(apt => apt.appointmentTime === timeStr);
-      
+
       if (!isBooked) {
         availableSlots.push(timeStr);
       }

@@ -8,8 +8,17 @@ dotenv.config();
 
 const app = express();
 
+// Configure CORS for development
+const corsOptions = {
+  origin: true, // Allow all origins
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -57,8 +66,31 @@ app.use('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
 
-app.listen(PORT, () => {
+// Get network interfaces for better logging
+const os = require('os');
+const ifaces = os.networkInterfaces();
+
+console.log('\n=== Server Starting ===');
+console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`Database: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/clinic-management'}`);
+console.log('\nAvailable Network Interfaces:');
+
+Object.keys(ifaces).forEach(ifname => {
+  ifaces[ifname].forEach(iface => {
+    if ('IPv4' === iface.family && !iface.internal) {
+      console.log(`- ${ifname}: http://${iface.address}:${PORT}`);
+    }
+  });
+});
+
+console.log('\nLocal Access:');
+console.log(`- Local: http://localhost:${PORT}`);
+console.log(`- Network: http://${os.hostname()}:${PORT}`);
+console.log('\nWaiting for connections...\n');
+
+app.listen(PORT, HOST, () => {
   console.log(`Server running on port ${PORT}`);
 });
 

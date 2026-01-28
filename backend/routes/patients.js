@@ -8,7 +8,7 @@ const router = express.Router();
 // @route   GET /api/patients
 // @desc    Get all patients
 // @access  Private
-router.get('/', auth, authorize('admin', 'receptionist', 'doctor'), async (req, res) => {
+router.get('/', auth, authorize('admin', 'receptionist', 'doctor', 'chemist'), async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
@@ -53,10 +53,10 @@ router.get('/', auth, authorize('admin', 'receptionist', 'doctor'), async (req, 
 // @route   GET /api/patients/:id
 // @desc    Get patient by ID
 // @access  Private
-router.get('/:id', auth, authorize('admin', 'receptionist', 'doctor'), async (req, res) => {
+router.get('/:id', auth, authorize('admin', 'receptionist', 'doctor', 'chemist'), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
-    
+
     if (!patient) {
       return res.status(404).json({ message: 'Patient not found' });
     }
@@ -96,6 +96,11 @@ router.post('/', auth, authorize('admin', 'receptionist'), [
     }
 
     const patientData = req.body;
+
+    // Remove email if it's empty string or null to prevent unique constraint error (sparse index)
+    if (!patientData.email) {
+      delete patientData.email;
+    }
 
     // Check if patient already exists by email (when provided)
     if (patientData.email) {
@@ -158,7 +163,7 @@ router.put('/:id', auth, authorize('admin', 'receptionist'), [
     }
 
     const patient = await Patient.findById(req.params.id);
-    
+
     if (!patient) {
       return res.status(404).json({ message: 'Patient not found' });
     }
@@ -169,6 +174,14 @@ router.put('/:id', auth, authorize('admin', 'receptionist'), [
       if (existingPatient) {
         return res.status(400).json({ message: 'Patient already exists with this email' });
       }
+    }
+
+    // Remove email if it's empty string or null
+    if (!req.body.email) {
+      delete req.body.email;
+      // If we want to explicitly clear the email, we might need $unset, 
+      // but for now let's just avoid sending empty string which might be treated as value
+      // If the intent is to clear it, we'd need more logic, but this fixes the "empty string causes dupe error"
     }
 
     const updatedPatient = await Patient.findByIdAndUpdate(
@@ -194,7 +207,7 @@ router.put('/:id', auth, authorize('admin', 'receptionist'), [
 router.delete('/:id', auth, authorize('admin', 'receptionist'), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
-    
+
     if (!patient) {
       return res.status(404).json({ message: 'Patient not found' });
     }
